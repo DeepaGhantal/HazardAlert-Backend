@@ -9,7 +9,7 @@ dotenv.config();
 const app = express();
 
 // Middleware
-app.use(cors()); // Enable Cross-Origin Resource Sharing
+app.use(cors({ origin: "https://your-netlify-site.netlify.app" })); // Replace with actual Netlify frontend URL
 app.use(express.json()); // Parse JSON request body
 
 // MongoDB Connection
@@ -24,9 +24,17 @@ mongoose.connect(process.env.MONGO_URI, {
 const hazardSchema = new mongoose.Schema({
     title: String,
     description: String,
-    location: String,
+    location: {
+        latitude: Number,
+        longitude: Number,
+        address: String
+    },
     severity: String,
-    date: { type: Date, default: Date.now }
+    status: { type: String, default: "reported" }, // Default status
+    reportedAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
+    resolutionDetails: String,
+    resolutionDate: Date
 });
 
 const Hazard = mongoose.model("Hazard", hazardSchema);
@@ -55,6 +63,30 @@ app.post("/api/hazards", async (req, res) => {
         res.status(201).json(newHazard);
     } catch (err) {
         res.status(400).json({ message: "Error creating hazard" });
+    }
+});
+
+// UPDATE hazard status (PATCH)
+app.patch("/api/hazards/:id", async (req, res) => {
+    try {
+        const { status, resolutionDetails } = req.body;
+        const updateFields = { status, updatedAt: Date.now() };
+
+        // If hazard is resolved, add resolution details
+        if (status === "resolved") {
+            updateFields.resolutionDetails = resolutionDetails;
+            updateFields.resolutionDate = Date.now();
+        }
+
+        const updatedHazard = await Hazard.findByIdAndUpdate(req.params.id, updateFields, { new: true });
+
+        if (!updatedHazard) {
+            return res.status(404).json({ message: "Hazard not found" });
+        }
+
+        res.json(updatedHazard);
+    } catch (err) {
+        res.status(500).json({ message: "Error updating hazard" });
     }
 });
 
